@@ -3,11 +3,11 @@ import requests
 import json
 import io
 import uuid
-from datetime import datetime
 from firebase_functions import https_fn
 from firebase_admin import firestore
 from openai import OpenAI
 from dotenv import load_dotenv
+from models.transcription import Transcription
 
 load_dotenv()
 
@@ -47,16 +47,11 @@ def transcription_handler(req: https_fn.Request) -> https_fn.Response:
     """
     Firebase function to transcribe audio from a URL.
     
-    Expected request body:
+    request body:
     {
         "audio_url": "https://example.com/audio.mp3"
     }
     
-    Returns:
-    {
-        "session_id": "auto-generated-uuid",
-        "status": "transcribed"
-    }
     """
     try:
         print('starting transcription')
@@ -73,12 +68,20 @@ def transcription_handler(req: https_fn.Request) -> https_fn.Response:
             )
         
         request_data = req.get_json()
-        audio_url = get_request_data(request_data)
-        session_id = generate_session_id()
-        aduio_file: io.BytesIO = download_audio(audio_url, session_id)        
-        transcription_object = transcribe_audio(aduio_file)
+        audio_url: str = get_request_data(request_data)
+        session_id: str = generate_session_id()
+        aduio_file: io.BytesIO = download_audio(audio_url, session_id)
+        transcription_result = transcribe_audio(aduio_file)
         
-        save_to_filestore(session_id, audio_url, transcription_object)
+        transcription: Transcription = {
+            **transcription_result,
+            "session_id": session_id,
+            "audio_url": audio_url,
+            "status": "transcribed",
+            "created_at": firestore.SERVER_TIMESTAMP,
+        }
+
+        save_to_filestore(transcription)
         
         return https_fn.Response(
             status=200,
@@ -127,70 +130,31 @@ def download_audio(audio_url: str, session_id: str) -> io.BytesIO:
 def transcribe_audio(audio_file: io.BytesIO):
     print('starting transcription')
     medical_context = "Medical consultation recording. It may contain technical medical terminology, patient symptoms, diagnosis, treatment plan, medications, or clinical observations."
-
     
     # mocked for testing
-    response = {
-        "text": "test",
-        "language": "en",
-        "duration": 0,
+    transcription_params = {
+        "file": audio_file,
+        "model": "whisper-1",
+        "response_format": "verbose_json",
+        "prompt": medical_context,
+        "temperature": 0.0,
     }
-    segments = [{
-        "id": "1",
-        "start": 0,
-        "end": 10,
-        "text": "test"
-    }]
-    return {
-        "text": response["text"],
-        "language": response["language"],
-        "segments": segments,
-        "duration": response["duration"],
-        "medical_context": medical_context
-    }
-  
-    # transcription_params = {
-    #     "file": audio_file,
-    #     "model": "whisper-1",
-    #     "response_format": "verbose_json",
-    #     "timestamp_granularities": ["segment"],
-    #     "prompt": medical_context,
-    #     "temperature": 0.0,
-    # }
 
-    # response = openai_client.audio.transcriptions.create(**transcription_params)
-    # print('got openai response')
-    # segments = []
-    # if response.segments:
-    #     for segment in response.segments:
-    #         segments.append({
-    #             "id": segment.id,
-    #             "start": segment.start,
-    #             "end": segment.end,
-    #             "text": segment.text
-    #         })
+    response = openai_client.audio.transcriptions.create(**transcription_params)
+    print('got openai response')
     
-    # return {
-    #     "text": response.text,
-    #     "language": response.language,
-    #     "segments": segments,
-    #     "duration": response.duration,
-    #     "medical_context": medical_context
-    # }
+    return {
+        "text": response.text,
+        "language": response.language,
+        # "segments": segments,
+        "duration": response.duration,
+        "context": medical_context
+    }
 
-def save_to_filestore(session_id: str, audio_url: str, transcription_object: dict):
+def save_to_filestore(transcription: Transcription):
     # Save transcription to Firestore to trigger information extraction
     db = firestore.client()
-    doc_ref = db.collection('transcriptions').document(session_id)
+    doc_ref = db.collection('transcriptions').document(transcription["session_id"])
     
-    # Add session metadata to the transcription object
-    firestore_data = {
-        **transcription_object,
-        "session_id": session_id,
-        "audio_url": audio_url,
-        "created_at": firestore.SERVER_TIMESTAMP,
-        "status": "transcribed"
-    }
-    
-    doc_ref.set(firestore_data)
-    print(f"Transcription saved to Firestore for session: {session_id}")
+    doc_ref.set(transcription)
+    print(f"Transcription saved to Firestore for session: {transcription["session_id"]}")
