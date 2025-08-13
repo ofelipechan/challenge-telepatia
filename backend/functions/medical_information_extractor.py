@@ -80,13 +80,12 @@ def extract_medical_information(transcription: Transcription) -> MedicalExtracti
 
     chain = build_chain(json_parser)
 
-    print("invoke chain")
-
     result: MedicalExtraction = chain.invoke(input={
         "transcription": transcription.text,
         "format_instructions": json_parser.get_format_instructions(),
     })
-    print("got result from chain invoke")
+
+    print("Medical extraction information finished")
 
     return result
 
