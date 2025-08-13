@@ -20,6 +20,18 @@ Watch this tutorial on how to setup the project:
 
 *Click the image above to watch the full demo video*
 
+## Application Screenshots
+
+### Initial Interface
+![Initial Interface](images/demo-1.png)
+
+### Processing State
+![Processing State](images/demo-2.png)
+
+### Results Display
+![Results Display](images/demo-3.png)
+
+
 ## Architecture
 
 - **Frontend**: React + TypeScript + Vite + Tailwind CSS
