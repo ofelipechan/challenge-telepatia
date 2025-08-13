@@ -27,6 +27,6 @@ class ClinicalRecord(MedicalExtraction):
     session_id: str
     classified_symptoms: Optional[List[ClassifiedSymptoms]] = Field(description="List of symptoms")
     diagnosis_report: Optional[str] = Field(default=None, description="The diagnosis report")
-    diagnosis_probability: Optional[List[DiagnosisProbability]] = Field(default=None, description="List probable diagnoses")
+    diagnosis: Optional[List[DiagnosisProbability]] = Field(default=None, description="List probable diagnoses")
     created_at: Optional[datetime] = Field(default=None, description="Timestamp when the record was created")
     updated_at: Optional[datetime] = Field(default=None, description="Timestamp when the transcription was last updated")

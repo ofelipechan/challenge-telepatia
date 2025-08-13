@@ -8,7 +8,7 @@ class Transcription(BaseModel):
     Database Model representing a transcription.
     """
     session_id: str
-    audio_url: str
+    audio_url: Optional[str] = Field(default=None, description="URL of the audio file")
     text: Optional[str] = Field(description="transcription in text")
     context: Optional[str] = Field(default=None, description="Additional context or notes about the transcription")
     duration: Optional[float] = Field(default=None, description="Duration of the audio file in seconds")

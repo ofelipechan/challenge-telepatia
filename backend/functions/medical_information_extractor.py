@@ -13,7 +13,7 @@ from models.transcription import Transcription
 from samples.medical_extraction_examples import get_examples
 
 @firestore_fn.on_document_created(document="transcriptions/{session_id}")
-def information_extractor(event: firestore_fn.Event[DocumentSnapshot]) -> None:
+def information_extractor_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
     """
     Firebase function triggered when a transcription document is created in Firestore.
     

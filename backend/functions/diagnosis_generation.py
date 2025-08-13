@@ -13,10 +13,13 @@ from langchain.output_parsers import PydanticOutputParser
 
 class ReportOutput(BaseModel):
     report: str = Field(description="The markdown diagnosis report")
-    diagnosis_probability: List[DiagnosisProbability] = Field(description="Based on the Diagnosis section of the report, generate a list of probable diagnoses for the patient")
+    diagnosis_probabilities: List[DiagnosisProbability] = Field(description="A list of probable diagnoses of the patient's condition")
+
+class DiagnosisList(BaseModel):
+    diagnosis_probabilities: List[DiagnosisProbability] = Field(description="List of probable diagnoses")
 
 @firestore_fn.on_document_created(document="clinical_record/{session_id}")
-def diagnosis_generation(event: firestore_fn.Event[DocumentSnapshot]) -> None:
+def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
     """
     Firebase function triggered when a clinical record document is created in Firestore.
     
@@ -35,10 +38,17 @@ def diagnosis_generation(event: firestore_fn.Event[DocumentSnapshot]) -> None:
             return
         
         set_processing_status(session_id, "processing_diagnosis")
-        diagnosis: ReportOutput = generate_diagnosis(clinical_record)
-        print(f"Diagnosis report: \n\n{diagnosis.report}")
-        print(f"Probabilistic differential diagnosis: \n\n{diagnosis.diagnosis_probability}")
+        diagnosis_report: str = generate_diagnosis_report(clinical_record)
+        print(f"Diagnosis report: \n\n{diagnosis_report}")
+        diagnosis_probability: List[DiagnosisProbability] = extract_diagnosis_from_report(diagnosis_report)
+        print(f"Probabilistic differential diagnosis: \n\n{diagnosis_probability}")
         # Save the diagnosis report to Firestore
+
+        diagnosis: ReportOutput = ReportOutput(
+            report=diagnosis_report,
+            diagnosis_probabilities=diagnosis_probability
+        )
+
         save_diagnosis_report(clinical_record.session_id, diagnosis)
         
         set_processing_status(session_id, "diagnosis_complete")
@@ -63,7 +73,7 @@ def set_processing_status(session_id: str, status: str, error_message: str = "")
     })
     print(f"Updated status for session {session_id}")
 
-def generate_diagnosis(clinical_record: ClinicalRecord) -> ReportOutput:
+def generate_diagnosis_report(clinical_record: ClinicalRecord) -> str:
     """
     Generate comprehensive diagnosis with treatment plan and recommendations using LLM.
     
@@ -73,24 +83,19 @@ def generate_diagnosis(clinical_record: ClinicalRecord) -> ReportOutput:
     - Recommendations including alerts for critical symptoms
     """
     print("Starting diagnosis generation with multi-step reasoning")
-    json_parser = PydanticOutputParser(pydantic_object=ReportOutput)
-
-    # Initialize LLM
+        # Initialize LLM
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
     
     # Get relevant medical knowledge using RAG
     medical_context = retrieve_medical_knowledge(clinical_record)
     print(f"Medical context: {medical_context}")
     
-    # Check for critical symptoms that need immediate attention
-    # critical_alerts = check_critical_symptoms(clinical_record.classified_symptoms or [])
-    
     # Build the comprehensive diagnosis prompt
     prompt_template = ChatPromptTemplate.from_messages([
         ("system", """You are an experienced doctor with expertise in clinical diagnosis, treatment planning, and patient care.
 
         You are given a clinical case of a patient.
-        Your task is to generate a report for the patient.
+        Your task is to generate a report about this clinical case.
 
         The report should be in the following format:
         
@@ -121,11 +126,8 @@ def generate_diagnosis(clinical_record: ClinicalRecord) -> ReportOutput:
         Use bullet points for readability.
 
         ---
-        IMPORTANT: You must provide your response in the exact JSON format specified below. The response should include:
-        1. A "report" field containing the complete markdown diagnosis report
-        2. A "diagnosis_probability" field containing a list of probable diagnoses with their probabilities, reasoning, and related symptoms.
-        
-        {format_instructions}
+
+        The response output should be a markdown string.
         """),
         ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
 
@@ -147,26 +149,56 @@ def generate_diagnosis(clinical_record: ClinicalRecord) -> ReportOutput:
     symptoms_details = format_symptoms_for_prompt(clinical_record.classified_symptoms or [])
 
     # Prepare prompt variables
-    chain = prompt_template | llm | json_parser
+    chain = prompt_template | llm
     
     try:
         print("Generating diagnosis")
-        response: ReportOutput = chain.invoke({
+        response = chain.invoke({
             "medical_context": medical_context,
             "summary": clinical_record.summary,
             "patient_info": clinical_record.patient_info.model_dump_json(),
             "reason_for_visit": clinical_record.reason_for_visit or "Not specified",
             "symptoms_details": symptoms_details,
-            "format_instructions": json_parser.get_format_instructions(),
         })
         
         print("Diagnosis generation completed successfully")
-        return response
+        return response.content
         
     except Exception as e:
         print(f"Error generating diagnosis: {str(e)}")
         raise "Unable to generate diagnosis at this time."
 
+def extract_diagnosis_from_report(diagnosis_report: str) -> List[DiagnosisProbability]:
+    """
+    Extract diagnosis from the report.
+    """
+    try:
+        print("Extracting diagnosis from report")
+
+        json_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+        prompt_template = ChatPromptTemplate.from_messages([
+            ("system", """
+            You are given a report of a clinical case of a patient.
+            Your task is to extract the exact List of probable diagnoses from the report
+            and return with the following format:
+
+            {format_instructions}
+            """),
+            ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
+            {diagnosis_report}
+            """),
+        ])
+        chain = prompt_template | llm | json_parser
+        response: DiagnosisList = chain.invoke({
+            "diagnosis_report": diagnosis_report,
+            "format_instructions": json_parser.get_format_instructions()
+            })
+        return response.diagnosis_probabilities
+    except Exception as e:
+        print(f"Error extracting diagnosis from report: {str(e)}")
+        raise "Unable to extract diagnosis from report at this time."
+     
 
 def retrieve_medical_knowledge(clinical_record: ClinicalRecord) -> str:
     """
@@ -241,7 +273,7 @@ def save_diagnosis_report(session_id: str, diagnosis: ReportOutput) -> None:
     
     doc_ref.update({
         "diagnosis_report": diagnosis.report,
-        "diagnosis_probability": [d.model_dump() for d in diagnosis.diagnosis_probability],
+        "diagnosis": [d.model_dump() for d in diagnosis.diagnosis_probabilities],
         "updated_at": firestore.SERVER_TIMESTAMP
     })
 
