@@ -1,22 +1,24 @@
 import { useState, useCallback } from "react";
 import { InputForm } from "./components/InputForm";
-import { medicalApi } from "./services/api";
+import { medicalApi, TranscriptionStatusMap, type ClinicalRecord, type TranscriptionStatus } from "./services/api";
 import { toast, Toaster } from "react-hot-toast";
 import "./App.css";
 import { Diagnosis } from "./components/Diagnosis";
+import { StepIndicator } from "./components/StepIndicator";
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | undefined>();
   const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<TranscriptionStatus | undefined>(undefined);
+  const [clinicalRecord, setClinicalRecord] = useState<ClinicalRecord | undefined>(undefined);
 
-  // Handle form submission
   const handleSubmit = useCallback(
     async (data: { audioUrl?: string; textInput?: string }) => {
       try {
         setIsLoading(true);
+        setStatus(TranscriptionStatusMap.TRANSCRIPTION_STARTED);
 
-        // Submit to transcription handler
         const response = await medicalApi.submitTranscription({
           audioUrl: data.audioUrl,
           transcriptionText: data.textInput,
@@ -25,6 +27,7 @@ function App() {
         console.log("session_id is: ", response.session_id);
         setSubmitted(true);
         setSessionId(response.session_id);
+        setStatus(TranscriptionStatusMap.TRANSCRIPTION_FINISHED);
         toast.success("Processing started!");
       } catch (error) {
         console.error("Error starting processing:", error);
@@ -35,6 +38,31 @@ function App() {
     },
     []
   );
+
+  const checkStatus = async () => {
+    setIsLoading(true);
+    if (!sessionId) {
+      return;
+    }
+    const response = await medicalApi.getTranscription(sessionId);
+    console.log(response);
+    
+    setStatus(response.status);
+    if (response.status === TranscriptionStatusMap.DIAGNOSIS_FINISHED) {
+      await getClinicalRecord();
+    }
+    setIsLoading(false);
+  };
+
+  
+  const getClinicalRecord = async () => {
+    if (!sessionId) {
+      return;
+    }
+    const response = await medicalApi.getClinicalRecord(sessionId);
+    console.log(response);
+    setClinicalRecord(response);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -49,7 +77,6 @@ function App() {
         }}
       />
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto py-8 px-5 md:px-0 md:max-w-2xl">
         <div className="space-y-6">
           <div className="p-6 mb-6">
@@ -62,11 +89,14 @@ function App() {
             </p>
           </div>
 
-          {!submitted ? (
+          {!submitted && (
           <InputForm onSubmit={handleSubmit} isLoading={isLoading} />
-          ) : (
-            <Diagnosis sessionId={sessionId} />
           )}
+          <StepIndicator status={status} />
+          {submitted && (
+            <Diagnosis sessionId={sessionId} clinicalRecord={clinicalRecord} isLoading={isLoading} checkStatus={checkStatus} />
+          )}
+
         </div>
       </main>
     </div>

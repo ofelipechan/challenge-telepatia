@@ -11,6 +11,7 @@ const api = axios.create({
 });
 
 export const TranscriptionStatusMap = {
+  TRANSCRIPTION_STARTED: "transcription_started",
   TRANSCRIPTION_FINISHED: "transcription_finished",
   TRANSCRIPTION_ERROR: "transcription_error",
   DIAGNOSIS_STARTED: "diagnosis_started",
@@ -78,9 +79,7 @@ export type ClinicalRecord = {
 }
 
 export const medicalApi = {
-  // Submit audio file or text input to transcription handler
   submitTranscription: async (data: { audioUrl?: string; transcriptionText?: string }): Promise<{ session_id: string }> => {
-    // Map camelCase to snake_case for API compatibility
     const requestBody = data.audioUrl 
       ? { audio_url: data.audioUrl }
       : { transcription_text: data.transcriptionText };
