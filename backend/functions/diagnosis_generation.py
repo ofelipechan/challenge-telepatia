@@ -19,7 +19,10 @@ class ReportOutput(BaseModel):
 class DiagnosisList(BaseModel):
     diagnosis_probabilities: List[DiagnosisProbability] = Field(description="List of probable diagnoses")
 
-@firestore_fn.on_document_created(document="clinical_record/{session_id}")
+@firestore_fn.on_document_created(
+    document="clinical_record/{session_id}",
+    timeout_sec=300  # 5 minutes
+)
 def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
     """
     Firebase function triggered when a clinical record document is created in Firestore.
@@ -225,11 +228,11 @@ def retrieve_medical_knowledge(clinical_record: ClinicalRecord) -> str:
         # Create query from symptoms and patient info
         query_parts = []
         if clinical_record.classified_symptoms:
-            symptom_names = [s.name for s in clinical_record.classified_symptoms]
+            symptom_names = [s.name.lower() for s in clinical_record.classified_symptoms]
             query_parts.extend(symptom_names)
         
         if clinical_record.reason_for_visit:
-            query_parts.append(clinical_record.reason_for_visit)
+            query_parts.append(clinical_record.reason_for_visit.lower())
             
         query = " ".join(query_parts)
         
