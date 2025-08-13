@@ -14,13 +14,12 @@ interface FormData {
 
 export const InputForm: React.FC<InputFormProps> = ({
   onSubmit,
-  isLoading,
+  isLoading = false,
 }) => {
   const [inputType, setInputType] = useState<"audio" | "text">("audio");
   const {
     register,
     handleSubmit,
-    reset,
     formState: { errors },
   } = useForm<FormData>();
 
@@ -30,21 +29,13 @@ export const InputForm: React.FC<InputFormProps> = ({
         ? { audioUrl: data.audioUrl }
         : { textInput: data.textInput };
 
-    onSubmit(submitData);
-    reset();
+    onSubmit(submitData);    
   };
 
   return (
     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-      <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">
-        Medical Information Processing
-      </h2>
-      <p className="text-sm text-gray-500 mb-4 text-center">
-        This is an AI-powered medical assistant designed to write clinical
-        report.
-      </p>
       {/* Input Type Toggle */}
-      <p className="mt-10 text-sm text-gray-500 text-center mb-4">
+      <p className="text-sm text-gray-500 text-center mb-4">
         Select the input type:
       </p>
       <div className="flex justify-center space-x-4 mb-6">
@@ -94,6 +85,7 @@ export const InputForm: React.FC<InputFormProps> = ({
               type="url"
               id="audioUrl"
               placeholder="https://example.com/audio-file.mp3"
+              disabled={isLoading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {errors.audioUrl && (
@@ -124,6 +116,7 @@ export const InputForm: React.FC<InputFormProps> = ({
               id="textInput"
               rows={6}
               placeholder="Enter patient symptoms, medical history, or consultation notes..."
+              disabled={isLoading}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
             />
             {errors.textInput && (

@@ -39,10 +39,7 @@ def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) ->
         
         set_processing_status(session_id, "processing_diagnosis")
         diagnosis_report: str = generate_diagnosis_report(clinical_record)
-        print(f"Diagnosis report: \n\n{diagnosis_report}")
         diagnosis_probability: List[DiagnosisProbability] = extract_diagnosis_from_report(diagnosis_report)
-        print(f"Probabilistic differential diagnosis: \n\n{diagnosis_probability}")
-        # Save the diagnosis report to Firestore
 
         diagnosis: ReportOutput = ReportOutput(
             report=diagnosis_report,
@@ -88,7 +85,6 @@ def generate_diagnosis_report(clinical_record: ClinicalRecord) -> str:
     
     # Get relevant medical knowledge using RAG
     medical_context = retrieve_medical_knowledge(clinical_record)
-    print(f"Medical context: {medical_context}")
     
     # Build the comprehensive diagnosis prompt
     prompt_template = ChatPromptTemplate.from_messages([

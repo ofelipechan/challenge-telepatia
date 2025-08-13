@@ -8,27 +8,12 @@ from firebase_admin import firestore
 from openai import OpenAI
 from dotenv import load_dotenv
 from models.transcription import Transcription
+from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
 
 load_dotenv()
 
 api_key = os.getenv("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=api_key)
-
-CORS_HEADERS = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-}
-
-
-def handle_cors_preflight(req) -> https_fn.Response | None:
-    if req.method == "OPTIONS":
-        return https_fn.Response(
-            status=200,
-            headers=CORS_HEADERS,
-        )
-    return None
 
 
 def get_request_data(request_data: dict) -> str:
@@ -50,6 +35,8 @@ def generate_session_id() -> str:
 
 
 @https_fn.on_request()
+@with_cors
+@with_methods(["POST"])
 def transcription_handler(req: https_fn.Request) -> https_fn.Response:
     """
     Firebase function to transcribe audio from a URL.
@@ -63,17 +50,6 @@ def transcription_handler(req: https_fn.Request) -> https_fn.Response:
     """
     try:
         print("starting transcription")
-
-        cors_response = handle_cors_preflight(req)
-        if cors_response:
-            return cors_response
-
-        if req.method != "POST":
-            return https_fn.Response(
-                status=405,
-                response=json.dumps({"error": "Method not allowed"}),
-                headers={"Content-Type": "application/json"},
-            )
 
         request_data = req.get_json()
         audio_url, transcription_text = get_request_data(request_data)

@@ -1,98 +1,74 @@
-import { useState, useCallback } from 'react';
-import { Heart, Brain } from 'lucide-react';
-import { InputForm } from './components/InputForm';
-import { ProcessingStatus } from './components/ProcessingStatus';
-import { MedicalResults } from './components/MedicalResults';
-import { medicalApi } from './services/api';
-import type { MedicalResult, ProcessingRequest } from './types/medical';
-import './App.css';
-import { toast, Toaster } from 'react-hot-toast';
-import Header from './components/Header';
+import { useState, useCallback } from "react";
+import { InputForm } from "./components/InputForm";
+import { medicalApi } from "./services/api";
+import { toast, Toaster } from "react-hot-toast";
+import "./App.css";
+import { Diagnosis } from "./components/Diagnosis";
 
 function App() {
   const [isLoading, setIsLoading] = useState(false);
-  const [medicalResult, setMedicalResult] = useState<MedicalResult | null>(null);
+  const [sessionId, setSessionId] = useState<string | undefined>();
+  const [submitted, setSubmitted] = useState(false);
 
   // Handle form submission
-  const handleSubmit = useCallback(async (data: { audioUrl?: string; textInput?: string }) => {
-    try {
-      setIsLoading(true);
-      setMedicalResult(null);
-      
-      // Submit to transcription handler
-      const response = await medicalApi.submitTranscription({
-        audioUrl: data.audioUrl,
-        transcriptionText: data.textInput,
-      });
+  const handleSubmit = useCallback(
+    async (data: { audioUrl?: string; textInput?: string }) => {
+      try {
+        setIsLoading(true);
 
-      console.log('session_id is: ', response)
-      
-      toast.success('Processing started!');
-      
-    } catch (error) {
-      console.error('Error starting processing:', error);
-      toast.error('Failed to start processing. Please try again.');
-      setMedicalResult({
-        processingStatus: 'error',
-        error: 'Failed to start processing',
-        extraction: {
-          symptoms: [],
-          patientInfo: {},
-          reasonForVisit: '',
-          timestamp: new Date().toISOString(),
-        },
-        diagnosis: {
-          primaryDiagnosis: '',
-          differentialDiagnoses: [],
-          confidence: 0,
-        },
-        treatmentPlan: {
-          medications: [],
-          recommendations: [],
-          followUp: '',
-          alerts: [],
-        },
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+        // Submit to transcription handler
+        const response = await medicalApi.submitTranscription({
+          audioUrl: data.audioUrl,
+          transcriptionText: data.textInput,
+        });
+
+        console.log("session_id is: ", response.session_id);
+        setSubmitted(true);
+        setSessionId(response.session_id);
+        toast.success("Processing started!");
+      } catch (error) {
+        console.error("Error starting processing:", error);
+        toast.error("Failed to start processing. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    []
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Toaster 
+      <Toaster
         position="top-right"
         toastOptions={{
           duration: 4000,
           style: {
-            background: '#363636',
-            color: '#fff',
+            background: "#363636",
+            color: "#fff",
           },
         }}
       />
-      
-      {/* Header */}
-      <Header />
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-8 px-5 md:px-0 md:max-w-2xl">
         <div className="space-y-6">
-          {/* Input Form */}
+          <div className="p-6 mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4 text-center">
+              Medical Information Processing
+            </h1>
+            <p className="text-sm text-gray-500 mb-4 text-center">
+              This is an AI-powered medical assistant designed to write clinical
+              report.
+            </p>
+          </div>
+
+          {!submitted ? (
           <InputForm onSubmit={handleSubmit} isLoading={isLoading} />
-
-          {/* Processing Status */}
-          {medicalResult && (
-            <ProcessingStatus result={medicalResult} isPolling={false} />
-          )}
-
-          {/* Medical Results */}
-          {medicalResult && medicalResult.processingStatus === 'completed' && (
-            <MedicalResults result={medicalResult} />
+          ) : (
+            <Diagnosis sessionId={sessionId} />
           )}
         </div>
       </main>
-
-      
     </div>
   );
 }
