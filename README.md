@@ -2,6 +2,8 @@
 
 A functional web application that processes audio or text inputs via Firebase Cloud Functions integrated with language models (LLMs), returning structured medical information.
 
+
+
 ## Project Overview
 
 This application provides:
@@ -9,6 +11,14 @@ This application provides:
 - **Medical Information Extraction**: Extract symptoms, patient info, and visit reasons using LLMs
 - **Diagnosis Generation**: Generate medical diagnoses and treatment plans
 - **Real-time UI**: React-based frontend with real-time updates and visualizations
+
+## Setup Video
+
+Watch this tutorial on how to setup the project:
+
+[![Telepatia Demo](https://img.youtube.com/vi/ldUQ6iHqWmU/0.jpg)](https://youtu.be/ldUQ6iHqWmU?si=AdU2jTSSqOXnPHT3)
+
+*Click the image above to watch the full demo video*
 
 ## Architecture
 
