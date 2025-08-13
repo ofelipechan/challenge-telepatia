@@ -9,7 +9,7 @@ from langchain.prompts import ChatPromptTemplate, FewShotChatMessagePromptTempla
 from langchain.output_parsers import PydanticOutputParser
 from langchain.schema import Document
 from langchain_core.vectorstores import InMemoryVectorStore
-from models.transcription import Transcription
+from models.transcription import Transcription, TranscriptionStatus
 from samples.medical_extraction_examples import get_examples
 
 @firestore_fn.on_document_created(document="transcriptions/{session_id}")
@@ -33,7 +33,7 @@ def information_extractor_handler(event: firestore_fn.Event[DocumentSnapshot]) -
             return
         
         # Update the document status to indicate processing started
-        set_processing_status(session_id, "processing_information_extraction")
+        set_processing_status(session_id, TranscriptionStatus.INFORMATION_EXTRACTION_STARTED)
         
         medical_extraction: MedicalExtraction = extract_medical_information(transcription)
 
@@ -46,6 +46,7 @@ def information_extractor_handler(event: firestore_fn.Event[DocumentSnapshot]) -
         )
         
         save_clinical_record(clinical_record)
+        set_processing_status(session_id, TranscriptionStatus.INFORMATION_EXTRACTION_FINISHED)
         
         print('information extraction complete')
         
@@ -53,15 +54,15 @@ def information_extractor_handler(event: firestore_fn.Event[DocumentSnapshot]) -
         print(f"Error in information_extractor: {str(e)}")
         if session_id:
             try:
-                set_processing_status(session_id, "error_extracting_information", str(e))
+                set_processing_status(session_id, TranscriptionStatus.TRANSCRIPTION_ERROR, str(e))
             except Exception as update_error:
                 print(f"Failed to update error status: {str(update_error)}")
 
-def set_processing_status(session_id: str, status: str, error_message: str = "") -> None:
+def set_processing_status(session_id: str, status: TranscriptionStatus, error_message: str = "") -> None:
     db = firestore.client()
     doc_ref = db.collection('transcriptions').document(session_id)
     doc_ref.update({
-        "status": status,
+        "status": status.value,
         "error_message": error_message,
         "updated_at": firestore.SERVER_TIMESTAMP
     })

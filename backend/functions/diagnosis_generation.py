@@ -6,6 +6,7 @@ from firebase_admin import firestore
 from pydantic import BaseModel, Field
 from samples.medical_documents import get_medical_documents
 from models.clinical_record import ClinicalRecord, ClassifiedSymptoms, DiagnosisProbability
+from models.transcription import TranscriptionStatus
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import InMemoryVectorStore
@@ -37,7 +38,7 @@ def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) ->
             print("Empty object provided on function invoke")
             return
         
-        set_processing_status(session_id, "processing_diagnosis")
+        set_processing_status(session_id, TranscriptionStatus.DIAGNOSIS_STARTED)
         diagnosis_report: str = generate_diagnosis_report(clinical_record)
         diagnosis_probability: List[DiagnosisProbability] = extract_diagnosis_from_report(diagnosis_report)
 
@@ -48,23 +49,23 @@ def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) ->
 
         save_diagnosis_report(clinical_record.session_id, diagnosis)
         
-        set_processing_status(session_id, "diagnosis_complete")
+        set_processing_status(session_id, TranscriptionStatus.DIAGNOSIS_FINISHED)
         print('Diagnosis generation complete')
 
     except Exception as e:
         print(f"Error in diagnosis_generation: {str(e)}")
         if session_id:
             try:
-                set_processing_status(session_id, "error_processing_diagnosis", str(e))
+                set_processing_status(session_id, TranscriptionStatus.DIAGNOSIS_ERROR, str(e))
             except Exception as update_error:
                 print(f"Failed to update error status: {str(update_error)}")
 
 
-def set_processing_status(session_id: str, status: str, error_message: str = "") -> None:
+def set_processing_status(session_id: str, status: TranscriptionStatus, error_message: str = "") -> None:
     db = firestore.client()
     doc_ref = db.collection('transcriptions').document(session_id)
     doc_ref.update({
-        "status": status,
+        "status": status.value,
         "error_message": error_message,
         "updated_at": firestore.SERVER_TIMESTAMP
     })
@@ -123,7 +124,7 @@ def generate_diagnosis_report(clinical_record: ClinicalRecord) -> str:
 
         ---
 
-        The response output should be a markdown string.
+        IMPORTANT: Return ONLY the markdown content without any code block delimiters (no ```markdown or ``` at the beginning or end). Start directly with the content using markdown formatting.
         """),
         ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
 

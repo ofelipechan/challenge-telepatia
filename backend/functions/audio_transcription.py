@@ -7,7 +7,7 @@ from firebase_functions import https_fn
 from firebase_admin import firestore
 from openai import OpenAI
 from dotenv import load_dotenv
-from models.transcription import Transcription
+from models.transcription import Transcription, TranscriptionStatus
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
 
 load_dotenv()
@@ -64,7 +64,7 @@ def transcription_handler(req: https_fn.Request) -> https_fn.Response:
             **transcription_result,
             "session_id": session_id,
             "audio_url": audio_url,
-            "status": "transcribed",
+            "status": TranscriptionStatus.TRANSCRIPTION_FINISHED,
             "created_at": firestore.SERVER_TIMESTAMP,
         }
 
@@ -73,7 +73,7 @@ def transcription_handler(req: https_fn.Request) -> https_fn.Response:
 
         return https_fn.Response(
             status=200,
-            response=json.dumps({"session_id": session_id, "status": "transcribed"}),
+            response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_FINISHED.value}),
             headers=CORS_HEADERS,
         )
 
