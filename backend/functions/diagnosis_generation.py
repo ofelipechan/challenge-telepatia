@@ -94,9 +94,10 @@ def generate_diagnosis_report(clinical_record: ClinicalRecord) -> str:
         You are given a clinical case of a patient.
         Your task is to generate a report about this clinical case.
 
-        The report should be in the following format:
+        The report should be in the following format using proper markdown structure:
         
-        **Diagnosis**
+        # Diagnosis
+        
         You need to analyze the patient's symptoms, their severity, and duration.
         Consider the patient's age, demographic factors, behavior, lifestyle, nutrition, hydration, and other factors that might be relevant for the diagnosis.
         Then:
@@ -108,23 +109,31 @@ def generate_diagnosis_report(clinical_record: ClinicalRecord) -> str:
         
         {medical_context}
 
-        **Treatment plan**
+        # Treatment Plan
+        
         - Create a personalized treatment plan to treat the patient's symptoms and disease.
         - Consider symptom severity in treatment intensity.
         - Include both pharmacological and non-pharmacological interventions (if applicable) to treat the patient's symptoms and disease.
 
-        **Recommendations**
+        # Recommendations
+        
         - Identify and alert if the patient has critical symptoms.
         - Provide follow-up recommendations (if applicable).
         - Include recommended tests and procedures for better diagnosis accuracy.
 
         ---
 
-        Use bullet points for readability.
+        **Formatting Instructions:**
+        - Use "#" for main section titles (Diagnosis, Treatment Plan, Recommendations)
+        - Use "##" for subsections within each main section (e.g., "## Probable Diagnoses", "## Most Likely Diagnosis")
+        - Use "###" for sub-subsections if needed (e.g., "### Pharmacological Interventions", "### Non-Pharmacological Interventions")
+        - Use bullet points for lists and readability
+        - Use **bold** for emphasis on important information
+        - Use *italic* for medical terms or emphasis
 
         ---
 
-        IMPORTANT: Return ONLY the markdown content without any code block delimiters (no ```markdown or ``` at the beginning or end). Start directly with the content using markdown formatting.
+        IMPORTANT: Return ONLY the markdown content without any code block delimiters (no ```markdown or ``` at the beginning or end).
         """),
         ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
 
