@@ -1,7 +1,8 @@
 import json
 from firebase_functions import https_fn
+from utils.request_utils import get_query_params
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
-from filestore.transcription_repository import get_transcription_by_session_id
+from repositories.transcription_repository import get_transcription_by_session_id
 
 @https_fn.on_request()
 @with_cors
@@ -21,7 +22,10 @@ def get_transcription(req: https_fn.Request) -> https_fn.Response:
       
         # Extract session_id from query parameters
         try:
-            session_id = get_session_id_from_query(req)
+            params = get_query_params(req, ["session_id"])
+            session_id = params["session_id"]
+            if not session_id:
+                raise ValueError("session_id not provided")
         except ValueError as e:
             return https_fn.Response(
                 status=400,
@@ -58,12 +62,4 @@ def get_transcription(req: https_fn.Request) -> https_fn.Response:
             }),
             headers=CORS_HEADERS
         )
-
-
-def get_session_id_from_query(req: https_fn.Request) -> str:
-    """Extract session_id from query parameters."""
-    session_id = req.args.get("session_id")
-    if not session_id:
-        raise ValueError("session_id parameter is required")
-    return session_id
 

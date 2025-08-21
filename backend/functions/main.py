@@ -1,12 +1,12 @@
 from firebase_functions import https_fn
 from firebase_functions.options import set_global_options
 from firebase_admin import initialize_app
-from audio_transcription import transcription_handler
-from medical_information_extractor import information_extractor_handler
-from diagnosis_generation import diagnosis_generation_handler
-from get_transcription_status import get_transcription
-from get_clinical_record import get_clinical_record
-from start_process import start_process
+from triggers.audio_transcription import transcription_handler
+from triggers.diagnosis_generation import diagnosis_generation_handler
+from triggers.get_clinical_record import get_clinical_record
+from triggers.get_transcription_status import get_transcription
+from triggers.medical_information_extractor import information_extractor_handler
+from triggers.start_process import start_process
 
 set_global_options(max_instances=10)
 

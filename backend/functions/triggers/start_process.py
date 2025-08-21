@@ -7,8 +7,8 @@ from firebase_admin import firestore
 from dotenv import load_dotenv
 from models.transcription import Transcription, TranscriptionStatus
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
-from filestore.transcription_repository import save_transcription
-from filestore.queue_repository import add_to_queue
+from repositories.transcription_repository import save_transcription
+from repositories.queue_repository import add_to_queue
 from models.queue import Queue
 
 load_dotenv()
@@ -53,6 +53,11 @@ def start_process(req: https_fn.Request) -> https_fn.Response:
         session_id: str = generate_session_id()
         if audio_url:
             add_to_queue(Queue(session_id=session_id, audio_url=audio_url))
+            return https_fn.Response(
+                status=200,
+                response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_WAITING }),
+                headers=CORS_HEADERS,
+            )
         elif transcription_text:
             transcription = Transcription(
                 session_id=session_id,
@@ -61,14 +66,13 @@ def start_process(req: https_fn.Request) -> https_fn.Response:
                 status=TranscriptionStatus.TRANSCRIPTION_FINISHED.value
             )
             save_transcription(transcription)
+            return https_fn.Response(
+                status=200,
+                response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_FINISHED }),
+                headers=CORS_HEADERS,
+            )
         else:
             raise ValueError("invalid transcription")
-
-        return https_fn.Response(
-            status=200,
-            response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_ERROR }),
-            headers=CORS_HEADERS,
-        )
     except ValueError as e:
         print(f"Validation error: {str(e)}")
         return https_fn.Response(

@@ -1,7 +1,7 @@
 from google.cloud.firestore import DocumentSnapshot
 from firebase_functions import firestore_fn
 from services.transcription_service import generate_transcription
-from filestore.queue_repository import set_queue_processing_status
+from repositories.queue_repository import set_queue_processing_status
 from models.queue import Queue, QueueStatus
 
 def get_request_data(request_data: dict) -> tuple[str, str]:

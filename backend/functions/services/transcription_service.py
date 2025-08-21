@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import requests
 
-from filestore.transcription_repository import save_transcription
+from repositories.transcription_repository import save_transcription
 from models.transcription import Transcription, TranscriptionStatus
 
 load_dotenv()
