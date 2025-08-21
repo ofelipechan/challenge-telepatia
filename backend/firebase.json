@@ -18,5 +18,8 @@
       ],
       "runtime": "python313"
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

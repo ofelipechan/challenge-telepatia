@@ -1,9 +1,7 @@
 import json
 from firebase_functions import https_fn
-from firebase_admin import firestore
-from models.transcription import Transcription
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
-
+from filestore.transcription_repository import get_transcription_by_session_id
 
 @https_fn.on_request()
 @with_cors
@@ -33,7 +31,7 @@ def get_transcription(req: https_fn.Request) -> https_fn.Response:
         
         # Retrieve transcription data from Firestore
         try:
-            transcription_data = retrieve_transcription(session_id)
+            transcription_data = get_transcription_by_session_id(session_id)
         except ValueError as e:
             return https_fn.Response(
                 status=404,
@@ -69,31 +67,3 @@ def get_session_id_from_query(req: https_fn.Request) -> str:
         raise ValueError("session_id parameter is required")
     return session_id
 
-def retrieve_transcription(session_id: str) -> dict:
-    """Retrieve transcription data from Firestore by session_id."""
-    db = firestore.client()
-    
-    # Query the transcriptions collection for the given session_id
-    transcriptions_ref = db.collection("transcriptions")
-    query = transcriptions_ref.where("session_id", "==", session_id)
-    docs = query.stream()
-    
-    # Get the first (and should be only) document
-    transcription_doc = None
-    for doc in docs:
-        transcription_doc = doc
-        break
-    
-    if not transcription_doc:
-        raise ValueError(f"No transcription found for session_id: {session_id}")
-    
-    # Convert Firestore document to dictionary
-    transcription_data = transcription_doc.to_dict()
-    
-    # Convert Firestore timestamps to ISO strings for JSON serialization
-    if "created_at" in transcription_data and transcription_data["created_at"]:
-        transcription_data["created_at"] = transcription_data["created_at"].isoformat()
-    if "updated_at" in transcription_data and transcription_data["updated_at"]:
-        transcription_data["updated_at"] = transcription_data["updated_at"].isoformat()
-    
-    return transcription_data
