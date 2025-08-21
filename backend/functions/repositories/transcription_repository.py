@@ -56,4 +56,4 @@ def set_processing_status(session_id: str, status: TranscriptionStatus, error_me
         "error_message": error_message,
         "updated_at": firestore.SERVER_TIMESTAMP
     })
-    print(f"Updated status for session {session_id}")
+    print(f"Updated session {session_id}. Status: {status}")

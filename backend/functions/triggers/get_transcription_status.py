@@ -34,15 +34,8 @@ def get_transcription(req: https_fn.Request) -> https_fn.Response:
             )
         
         # Retrieve transcription data from Firestore
-        try:
-            transcription_data = get_transcription_by_session_id(session_id)
-        except ValueError as e:
-            return https_fn.Response(
-                status=404,
-                response=json.dumps({"error": str(e)}),
-                headers=CORS_HEADERS
-            )
-        
+        transcription_data = get_transcription_by_session_id(session_id)
+
         return https_fn.Response(
             status=200,
             response=json.dumps({
