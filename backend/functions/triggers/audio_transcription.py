@@ -1,6 +1,6 @@
 from google.cloud.firestore import DocumentSnapshot
 from firebase_functions import firestore_fn
-from services.transcription_service import generate_transcription
+from services.transcription_service import TranscriptionService
 from repositories.queue_repository import set_queue_processing_status
 from models.queue import Queue, QueueStatus
 
@@ -25,7 +25,7 @@ def transcription_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
     Firebase function to transcribe audio.
     """
     try:
-        print("starting transcription")
+        print("starting transcription handler")
 
         session_id = event.params.get("session_id")
         assert session_id, "Session ID is required"
@@ -36,7 +36,9 @@ def transcription_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
             print("Empty object provided on function invoke")
             return
 
-        generate_transcription(queue.audio_url, session_id)
+        transcription_service = TranscriptionService()
+
+        transcription_service.process(queue.audio_url, session_id)
 
         set_queue_processing_status(session_id, QueueStatus.FINISHED)
     except Exception as e:
