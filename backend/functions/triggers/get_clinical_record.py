@@ -1,6 +1,6 @@
 import json
 from firebase_functions import https_fn
-from firebase_admin import firestore
+from repositories.clinical_record_repository import get_clinical_record_by_session
 from utils.request_utils import get_query_params
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
 
@@ -35,7 +35,7 @@ def get_clinical_record(req: https_fn.Request) -> https_fn.Response:
         
         # Retrieve clinical record data from Firestore
         try:
-            clinical_record_data = retrieve_clinical_record(session_id)
+            clinical_record_data = get_clinical_record_by_session(session_id)
         except ValueError as e:
             return https_fn.Response(
                 status=404,
@@ -62,32 +62,3 @@ def get_clinical_record(req: https_fn.Request) -> https_fn.Response:
             }),
             headers=CORS_HEADERS
         )
-
-def retrieve_clinical_record(session_id: str) -> dict:
-    """Retrieve clinical record data from Firestore by session_id."""
-    db = firestore.client()
-    
-    # Query the clinical_records collection for the given session_id
-    clinical_records_ref = db.collection("clinical_record")
-    query = clinical_records_ref.where("session_id", "==", session_id)
-    docs = query.stream()
-    
-    # Get the first (and should be only) document
-    clinical_record_doc = None
-    for doc in docs:
-        clinical_record_doc = doc
-        break
-    
-    if not clinical_record_doc:
-        raise ValueError(f"No clinical record found for session_id: {session_id}")
-    
-    # Convert Firestore document to dictionary
-    clinical_record_data = clinical_record_doc.to_dict()
-    
-    # Convert Firestore timestamps to ISO strings for JSON serialization
-    if "created_at" in clinical_record_data and clinical_record_data["created_at"]:
-        clinical_record_data["created_at"] = clinical_record_data["created_at"].isoformat()
-    if "updated_at" in clinical_record_data and clinical_record_data["updated_at"]:
-        clinical_record_data["updated_at"] = clinical_record_data["updated_at"].isoformat()
-    
-    return clinical_record_data
