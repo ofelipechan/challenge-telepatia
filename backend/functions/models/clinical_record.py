@@ -30,3 +30,7 @@ class ClinicalRecord(MedicalExtraction):
     diagnosis: Optional[List[DiagnosisProbability]] = Field(default=None, description="List probable diagnoses")
     created_at: Optional[datetime] = Field(default=None, description="Timestamp when the record was created")
     updated_at: Optional[datetime] = Field(default=None, description="Timestamp when the transcription was last updated")
+
+class ReportOutput(BaseModel):
+    report: str = Field(description="The markdown diagnosis report")
+    diagnosis_probabilities: List[DiagnosisProbability] = Field(description="A list of probable diagnoses of the patient's condition")
