@@ -53,7 +53,7 @@ def start_process(req: https_fn.Request) -> https_fn.Response:
         session_id: str = generate_session_id()
 
         if audio_url:
-            # add to transcriptino queue
+            # add to transcription queue
             add_to_queue(Queue(session_id=session_id, audio_url=audio_url))
             return https_fn.Response(
                 status=200,

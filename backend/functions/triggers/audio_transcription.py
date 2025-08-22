@@ -42,7 +42,7 @@ def transcription_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
 
         set_queue_processing_status(session_id, QueueStatus.FINISHED)
     except Exception as e:
-        print('An error occured while executing transcription function')
+        print('An error occurred while executing transcription function')
         if session_id:
             set_queue_processing_status(session_id, QueueStatus.ERROR)
         raise e

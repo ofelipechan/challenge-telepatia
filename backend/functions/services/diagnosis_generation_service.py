@@ -142,7 +142,7 @@ class DiagnosisGenerationService:
             
         except Exception as e:
             print(f"Error generating diagnosis: {str(e)}")
-            raise "Unable to generate diagnosis at this time."
+            raise e
 
     def _extract_diagnosis_from_report(self, diagnosis_report: str) -> List[DiagnosisProbability]:
         """
@@ -173,8 +173,8 @@ class DiagnosisGenerationService:
             return response.diagnosis_probabilities
         except Exception as e:
             print(f"Error extracting diagnosis from report: {str(e)}")
-            raise "Unable to extract diagnosis from report at this time."
-        
+            raise e
+
 
     def _retrieve_medical_knowledge(self, clinical_record: ClinicalRecord) -> str:
         """
