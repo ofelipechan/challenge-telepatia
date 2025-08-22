@@ -37,6 +37,6 @@ def diagnosis_generation_handler(event: firestore_fn.Event[DocumentSnapshot]) ->
                 set_processing_status(session_id, TranscriptionStatus.DIAGNOSIS_ERROR, str(e))
             except Exception as update_error:
                 print(f"Failed to update error status: {str(update_error)}")
-        raise e
+        raise
 
 
