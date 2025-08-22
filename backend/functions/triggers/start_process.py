@@ -1,9 +1,7 @@
-import os
 import requests
 import json
 import uuid
 from firebase_functions import https_fn
-from firebase_admin import firestore
 from dotenv import load_dotenv
 from models.transcription import Transcription, TranscriptionStatus
 from middlewares.request_middleware import with_cors, with_methods, CORS_HEADERS
@@ -13,7 +11,7 @@ from models.queue import Queue
 
 load_dotenv()
 
-def get_request_data(request_data: dict) -> str:
+def get_request_data(request_data: dict) -> tuple[str, str]:
     if not request_data:
         raise ValueError("No JSON data provided")
 
