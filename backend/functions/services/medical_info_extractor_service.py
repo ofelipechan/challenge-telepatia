@@ -141,48 +141,55 @@ class MedicalInfoExtractor:
         )
 
         prompt_template = ChatPromptTemplate.from_messages(messages=[
-            ("system", """You are a medical information extractor with expertise in clinical documentation.
-            You will be given the transcription of a conversation between a doctor and a patient.
-            
-            Follow this chain-of-thought process:
-            
-            STEP 1 - PATIENT IDENTIFICATION:
-            - Extract patient name, age, date of birth, nationality, and ID number if mentioned during transcription.
-            - Ensure age is within reasonable range (0-120)
-            
-            STEP 2 - REASON FOR VISIT ANALYSIS:
-            - Identify the primary complaint or reason for seeking medical care.
-            - Assess urgency level.
-            
-            STEP 3 - SYMPTOM EXTRACTION:
-            - Identify all symptoms the patient presented.
-            - Add the intensity of each symptom based on the patient's speech.
-            - Note the duration the symptom has persisted.
-            - 
-            
-            STEP 4 - CONFIDENCE ASSESSMENT:
-            - Evaluate completeness of information.
-            - Assess clarity of medical terminology.
-            - Consider ambiguity in patient statements.
+            ("system", """
+            <context>
+                You are a medical information extractor with expertise in clinical documentation.
+                You will be given the transcription of a conversation between a doctor and a patient.
+            </context>
+            <instructions>
+                Follow this step-by-step thought process:
+                
+                STEP 1 - PATIENT IDENTIFICATION:
+                - Extract patient name, age, date of birth, nationality, and ID number if mentioned during transcription.
+                - Ensure age is within reasonable range (0-120)
+                
+                STEP 2 - REASON FOR VISIT ANALYSIS:
+                - Identify the primary complaint or reason for seeking medical care.
+                - Assess urgency level.
+                
+                STEP 3 - SYMPTOM EXTRACTION:
+                - Identify all symptoms the patient presented.
+                - Add the intensity of each symptom based on the patient's speech.
+                - Note the duration the symptom has persisted.
+                
+                STEP 4 - CONFIDENCE ASSESSMENT:
+                - Evaluate completeness of information.
+                - Assess clarity of medical terminology.
+                - Consider ambiguity in patient statements.
 
-            STEP 5 - GENERATE SUMMARY
-            - Finalize by generating a summary of the transcription.
-            - Include the patient's name, age, reason for visit and symptoms.
-            - Ensure the summary is concise and informative.
-            - Based in the transcription, you include information that might be relevant for the diagnosis process, such as:
-            - behavior situations (actions the patient took that could have lead to the symptoms)
-            - lifestyle (the patient's lifestyle, habits, and routines)
-            - nutrition (what did the patient report to have eaten)
-            - hydration (the patient report to getting hydrated)
-            - sleep (how much sleep is the patient getting)
-            - or any other relevant information.
-            
-            Use the following JSON schema for output:
-            {format_instructions}
-
+                STEP 5 - GENERATE SUMMARY
+                - Finalize by generating a summary of the transcription.
+                - Include the patient's name, age, reason for visit and symptoms.
+                - Ensure the summary is concise and informative.
+                - Based in the transcription, you include information that might be relevant for the diagnosis process, such as:
+                - behavior situations (actions the patient took that could have lead to the symptoms)
+                - lifestyle (the patient's lifestyle, habits, and routines)
+                - nutrition (what did the patient report to have eaten)
+                - hydration (the patient report to getting hydrated)
+                - sleep (how much sleep is the patient getting)
+                - or any other relevant information.
+            </instructions>
+            <output>
+                Use the following JSON schema for output:
+                {format_instructions}
+            </output>
             Ensure all extracted data follows medical standards and validation rules."""),
             few_shot_prompt,
-            ("human", "Extract medical information from this transcription using the step-by-step process: {transcription}"),
+            ("human", """Extract medical information from this transcription using the step-by-step process:
+            <transcription>
+                {transcription}
+            </transcription>
+            """),
         ])
 
         return prompt_template | llm | json_parser

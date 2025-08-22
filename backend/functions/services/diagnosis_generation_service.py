@@ -59,11 +59,13 @@ class DiagnosisGenerationService:
         
         # Build the comprehensive diagnosis prompt
         prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """You are an experienced doctor with expertise in clinical diagnosis, treatment planning, and patient care.
-
-            You are given a clinical case of a patient.
-            Your task is to generate a report about this clinical case.
-
+            ("system", """
+            <context>
+                You are an experienced doctor with expertise in clinical diagnosis, treatment planning, and patient care.
+                You are given a clinical case of a patient.
+                Your task is to generate a markdown report about this clinical case.
+            </context>
+            <instructions>
             The report should be in the following format using proper markdown structure:
             
             # Diagnosis
@@ -75,9 +77,11 @@ class DiagnosisGenerationService:
             - Assign probability estimates (0-100%) for each diagnosis based on the probability of the patient having the disease given their clinical case.
             - Explain the disease and the reasoning behind the probable diagnosis. Relate the patient's symptoms to the diagnosis.
             - Select the most likely diagnosis of the patient. Justify your selection with clinical reasoning.
-            - Use the following text extracted from a medical knowledge base for evidence-based reasoning:
+            - Use the following text (delimited by `<knowledge-base></knowledge-base>`) extracted from a medical knowledge base for evidence-based reasoning:
             
+            <knowledge-base>
             {medical_context}
+            </knowledge-base>
 
             # Treatment Plan
             
@@ -91,7 +95,9 @@ class DiagnosisGenerationService:
             - Provide follow-up recommendations (if applicable).
             - Include recommended tests and procedures for better diagnosis accuracy.
 
+            </instructions>
             ---
+            <output>
 
             **Formatting Instructions:**
             - Use "#" for main section titles (Diagnosis, Treatment Plan, Recommendations)
@@ -104,6 +110,7 @@ class DiagnosisGenerationService:
             ---
 
             IMPORTANT: Return ONLY the markdown content without any code block delimiters (no ```markdown or ``` at the beginning or end).
+            </output>
             """),
             ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
 
