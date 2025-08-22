@@ -51,28 +51,29 @@ def start_process(req: https_fn.Request) -> https_fn.Response:
         request_data = req.get_json()
         audio_url, transcription_text = get_request_data(request_data)
         session_id: str = generate_session_id()
+
         if audio_url:
+            # add to transcriptino queue
             add_to_queue(Queue(session_id=session_id, audio_url=audio_url))
             return https_fn.Response(
                 status=200,
                 response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_WAITING }),
                 headers=CORS_HEADERS,
             )
-        elif transcription_text:
-            transcription = Transcription(
-                session_id=session_id,
-                text=transcription_text,
-                audio_url=audio_url,
-                status=TranscriptionStatus.TRANSCRIPTION_FINISHED.value
-            )
-            save_transcription(transcription)
-            return https_fn.Response(
-                status=200,
-                response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_FINISHED }),
-                headers=CORS_HEADERS,
-            )
-        else:
-            raise ValueError("invalid transcription")
+
+        # transcription already provided
+        transcription = Transcription(
+            session_id=session_id,
+            text=transcription_text,
+            audio_url=audio_url,
+            status=TranscriptionStatus.TRANSCRIPTION_FINISHED.value
+        )
+        save_transcription(transcription)
+        return https_fn.Response(
+            status=200,
+            response=json.dumps({"session_id": session_id, "status": TranscriptionStatus.TRANSCRIPTION_FINISHED }),
+            headers=CORS_HEADERS,
+        )
     except ValueError as e:
         print(f"Validation error: {str(e)}")
         return https_fn.Response(
