@@ -10,10 +10,13 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain.output_parsers import PydanticOutputParser
-
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
 
 class DiagnosisList(BaseModel):
+    summary: str = Field(description="A summary about the report.")
     diagnosis_probabilities: List[DiagnosisProbability] = Field(description="List of probable diagnoses")
+    conclusion: str = Field(description="A conclusion about the most likely diagnosis of the patient with justification for the selection with clinical reasoning.")
 
 class DiagnosisGenerationService:
 
@@ -26,8 +29,8 @@ class DiagnosisGenerationService:
         try:
             assert clinical_record.session_id, "session_id not provided"      
             set_processing_status(clinical_record.session_id, TranscriptionStatus.DIAGNOSIS_STARTED)
-            diagnosis_report: str = self._generate_diagnosis_report(clinical_record)
-            diagnosis_probability: List[DiagnosisProbability] = self._extract_diagnosis_from_report(diagnosis_report)
+            diagnosis_report, parsed_diagnosis = self._generate_diagnosis_report(clinical_record)
+            diagnosis_probability: List[DiagnosisProbability] = parsed_diagnosis.diagnosis_probabilities
 
             diagnosis: ReportOutput = ReportOutput(
                 report=diagnosis_report,
@@ -41,147 +44,158 @@ class DiagnosisGenerationService:
             print(f"Error in diagnosis_generation: {str(e)}")
             raise e
 
-    def _generate_diagnosis_report(self, clinical_record: ClinicalRecord) -> str:
-        """
-        Generate comprehensive diagnosis with treatment plan and recommendations using LLM.
-        
-        Returns markdown-formatted report combining:
-        - Diagnosis with estimated probabilities using multi-step reasoning
-        - Treatment plan personalized by age and symptoms
-        - Recommendations including alerts for critical symptoms
-        """
-        print("Starting diagnosis generation with multi-step reasoning")
-            # Initialize LLM
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
-        
-        # Get relevant medical knowledge using RAG
-        medical_context = self._retrieve_medical_knowledge(clinical_record)
-        
-        # Build the comprehensive diagnosis prompt
-        prompt_template = ChatPromptTemplate.from_messages([
-            ("system", """
+    def _generate_diagnosis_report(self, clinical_record: ClinicalRecord) -> tuple[str, DiagnosisList]:
+        # Chain 1 - Diagnosis Report
+        diagnosis_template = ChatPromptTemplate.from_template("""
             <context>
-                You are an experienced doctor with expertise in clinical diagnosis, treatment planning, and patient care.
-                You are given a clinical case of a patient.
-                Your task is to generate a markdown report about this clinical case.
+                You are a doctor with expertise in clinical diagnosis.
+                You'll be given a summary of a conversation between a doctor and a patient, information about the patient, reason for the visit and details about the symptoms.
+                You need to analyze the patient's symptoms, their severity, and duration.
+                Consider the patient's age, demographic factors, behavior, lifestyle, nutrition, hydration, and other factors that might be relevant for the diagnosis.
             </context>
+
+            <input>
+                <summary>
+                {summary}
+                </summary>
+
+                <patient_info>
+                {patient_info}
+                </patient_info>
+
+                <reason_for_visit>
+                {reason_for_visit}
+                </reason_for_visit>
+
+                <symptoms_details>
+                {symptoms_details}
+                </symptoms_details>
+            </input>
+
             <instructions>
-            The report should be in the following format using proper markdown structure:
-            
-            # Diagnosis
-            
-            You need to analyze the patient's symptoms, their severity, and duration.
-            Consider the patient's age, demographic factors, behavior, lifestyle, nutrition, hydration, and other factors that might be relevant for the diagnosis.
-            Then:
-            - Generate a list of probable diagnosis using evidence-based reasoning.
-            - Assign probability estimates (0-100%) for each diagnosis based on the probability of the patient having the disease given their clinical case.
-            - Explain the disease and the reasoning behind the probable diagnosis. Relate the patient's symptoms to the diagnosis.
-            - Select the most likely diagnosis of the patient. Justify your selection with clinical reasoning.
-            - Use the following text (delimited by `<knowledge-base></knowledge-base>`) extracted from a medical knowledge base for evidence-based reasoning:
+                1- Generate a list of probable diagnosis using evidence-based reasoning.
+                2- Based on the chances of the patient having the disease, assign probability estimates (0-100%) for each diagnosis.
+                3- Explain the disease and the reasoning behind the probable diagnosis. Relate the patient's symptoms to the diagnosis.
+                4- Refer to the text within `<knowledge-base></knowledge-base>` for evidence-based reasoning. Use it as guidance, but also, feel free to consider alternative diagnoses not listed in the knowledge base.
+            </instructions>
             
             <knowledge-base>
-            {medical_context}
+            {knowledge_base}
             </knowledge-base>
-
-            # Treatment Plan
             
-            - Create a personalized treatment plan to treat the patient's symptoms and disease.
-            - Consider symptom severity in treatment intensity.
-            - Include both pharmacological and non-pharmacological interventions (if applicable) to treat the patient's symptoms and disease.
+            <output-instructions>
+                Present your response with the following attributes:
+                - summary: Explain what the transcription is about. Include patient's name, age, gender, and symptoms and relevant information for the diagnosis.
+                - diagnosis_probabilities: Provide the list of probable diagnosis according to the instructions.
+                - conclusion: Select the most likely diagnosis of the patient. Justify your selection with clinical reasoning.
+            </output-instructions>
 
-            # Recommendations
-            
-            - Identify and alert if the patient has critical symptoms.
-            - Provide follow-up recommendations (if applicable).
-            - Include recommended tests and procedures for better diagnosis accuracy.
-
-            </instructions>
-            ---
             <output>
-
-            **Formatting Instructions:**
-            - Use "#" for main section titles (Diagnosis, Treatment Plan, Recommendations)
-            - Use "##" for subsections within each main section (e.g., "## Probable Diagnoses", "## Most Likely Diagnosis")
-            - Use "###" for sub-subsections if needed (e.g., "### Pharmacological Interventions", "### Non-Pharmacological Interventions")
-            - Use bullet points for lists and readability
-            - Use **bold** for emphasis on important information
-            - Use *italic* for medical terms or emphasis
-
-            ---
-
-            IMPORTANT: Return ONLY the markdown content without any code block delimiters (no ```markdown or ``` at the beginning or end).
+            {diagnosis_output_parser}
             </output>
-            """),
-            ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
-
-            Clinical Record:
-            {summary}
-
-            Patient Information:
-            {patient_info}
-            
-            Reason for visit:
-            {reason_for_visit}
-
-            Symptoms Analysis:
-            {symptoms_details}
             """)
-        ])
-        
-        # Format symptoms for the prompt
+
+        # Chain 2 - Treatment Plan
+        treatment_plan_template = ChatPromptTemplate.from_template(template="""
+            <context>
+                You are a doctor with expertise in generating treatment plan for patients.
+                You'll be given a diagnosis report generated for a patient, having probability estimates (0-100%) based on the chances of the patient having the disease.
+                You need to analyze the full report, the patient's symptoms, their severity, and duration.
+                Consider the patient's age, demographic factors, behavior, lifestyle, nutrition, hydration, and other factors that might be relevant for the treatment plan.
+            </context>
+            <instructions>
+                # Treatment Plan
+                - Develop a **personalized treatment plan** tailored to the patient's condition and symptoms.  
+                - Adjust treatment intensity based on **symptom severity**.  
+                - Include both **pharmacological** and **non-pharmacological** interventions when applicable.  
+                - Provide a clear **explanation and clinical reasoning** behind each element of the treatment plan.  
+
+                # Recommendations
+                - Write a **recommendation text** directed to the doctor managing the case.  
+                - **Highlight and alert** if any critical or red-flag symptoms are present.  
+                - Suggest appropriate **diagnostic tests and procedures** to improve accuracy.  
+                - Explain the **clinical reasoning** behind each recommendation.  
+                - Include **follow-up actions or monitoring** if relevant.  
+            </instructions>
+            
+            <diagnosis_report>
+            {diagnosis_output}
+            </diagnosis_report>
+            
+            <output>
+                - Present your response in two distinct sections, each with its own title: "Treatment Plan" and "Recommendation".
+            </output>
+        """
+        )
+
+        report_template = ChatPromptTemplate.from_template(template="""
+            <role>
+                You are an expert in creating structured and professional **markdown reports** for clinical cases.
+            </role>
+
+            <context>
+                You will be provided with the following information:
+                - A **Diagnosis Report** containing "Summary", "Diagnosis", and "Conclusion".
+                - A **Treatment Plan** and **Recommendations** for the patient.
+            </context>
+
+            <goal>
+                - Generate a clear, well-structured report in **markdown format**.  
+                - Use **bullet points** for readability and concise presentation.  
+                - Format hierarchy with **"#" for main sections**, **"##" for subsections**, and **"###" for sub-subsections**.  
+                - Highlight key details with **bold** and emphasize *medical terms* or important notes with *italics*.  
+                - Ensure the report is **intuitive, professional, and easy to navigate** for clinical use.  
+            </goal>
+
+            
+            <diagnosis_report>
+            {diagnosis_output}
+            </diagnosis_report>
+            
+            <treatment_plan>
+            {treatment_plan}
+            </treatment_plan>
+            
+            <output>
+                Generate a comprehensive report in markdown format combining the diagnosis and treatment information.
+            </output>
+        """)
+
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
+
+        knowledge_base = self._retrieve_medical_knowledge(clinical_record)
         symptoms_details = self._format_symptoms_for_prompt(clinical_record.classified_symptoms or [])
 
-        # Prepare prompt variables
-        chain = prompt_template | llm
+        diagnosis_output_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
+
+        # 1 - Generate diagnosis
+        diagnosis_chain = diagnosis_template | llm | diagnosis_output_parser
+        parsed_diagnosis = diagnosis_chain.invoke({
+            "knowledge_base": knowledge_base,
+            "summary": clinical_record.summary,
+            "patient_info": clinical_record.patient_info.model_dump_json(),
+            "reason_for_visit": clinical_record.reason_for_visit or "Not specified",
+            "symptoms_details": symptoms_details,
+            "diagnosis_output_parser": diagnosis_output_parser.get_format_instructions()
+        })
+        print('diagnosis generated')
         
-        try:
-            print("Generating diagnosis")
-            response = chain.invoke({
-                "medical_context": medical_context,
-                "summary": clinical_record.summary,
-                "patient_info": clinical_record.patient_info.model_dump_json(),
-                "reason_for_visit": clinical_record.reason_for_visit or "Not specified",
-                "symptoms_details": symptoms_details,
-            })
-            
-            print("Diagnosis generation completed successfully")
-            return response.content
-            
-        except Exception as e:
-            print(f"Error generating diagnosis: {str(e)}")
-            raise e
-
-    def _extract_diagnosis_from_report(self, diagnosis_report: str) -> List[DiagnosisProbability]:
-        """
-        Extract diagnosis from the report.
-        """
-        try:
-            print("Extracting diagnosis from report")
-
-            json_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
-            llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
-            prompt_template = ChatPromptTemplate.from_messages([
-                ("system", """
-                You are given a report of a clinical case of a patient.
-                Your task is to extract the exact List of probable diagnoses from the report
-                and return with the following format:
-
-                {format_instructions}
-                """),
-                ("human", """Please analyze this clinical case and provide a comprehensive diagnosis report:
-                {diagnosis_report}
-                """),
-            ])
-            chain = prompt_template | llm | json_parser
-            response: DiagnosisList = chain.invoke({
-                "diagnosis_report": diagnosis_report,
-                "format_instructions": json_parser.get_format_instructions()
-                })
-            return response.diagnosis_probabilities
-        except Exception as e:
-            print(f"Error extracting diagnosis from report: {str(e)}")
-            raise e
-
+        # Convert the parsed diagnosis to a string
+        diagnosis_string = parsed_diagnosis.model_dump_json()
+        
+        print('generating treatment plan and report')
+        # Generate treatment plan and final report in a single chain
+        treatment_and_report_chain = (
+            {"treatment_plan": treatment_plan_template | llm | StrOutputParser()}
+            | {"diagnosis_output": RunnablePassthrough(), "treatment_plan": RunnablePassthrough()}
+            | report_template | llm | StrOutputParser()
+        )
+        
+        final_report = treatment_and_report_chain.invoke({
+            "diagnosis_output": diagnosis_string
+        })
+        
+        return final_report, parsed_diagnosis
 
     def _retrieve_medical_knowledge(self, clinical_record: ClinicalRecord) -> str:
         """
