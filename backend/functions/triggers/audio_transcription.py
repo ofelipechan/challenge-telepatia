@@ -45,4 +45,4 @@ def transcription_handler(event: firestore_fn.Event[DocumentSnapshot]) -> None:
         print('An error occurred while executing transcription function')
         if session_id:
             set_queue_processing_status(session_id, QueueStatus.ERROR)
-        raise e
+        raise
