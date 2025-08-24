@@ -1,17 +1,17 @@
 
 from typing import List
 from pydantic import BaseModel, Field
+from repositories.medical_knowledge_base_repository import MedicalKnowledgeRepository
 from repositories.clinical_record_repository import save_diagnosis_report
 from repositories.transcription_repository import set_processing_status
-from samples.medical_documents import get_medical_documents
 from models.clinical_record import ClinicalRecord, ClassifiedSymptoms, DiagnosisProbability, ReportOutput
 from models.transcription import TranscriptionStatus
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
-from langchain_core.vectorstores import InMemoryVectorStore
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from langchain import hub
 
 class DiagnosisList(BaseModel):
     summary: str = Field(description="A summary about the report.")
@@ -19,6 +19,8 @@ class DiagnosisList(BaseModel):
     conclusion: str = Field(description="A conclusion about the most likely diagnosis of the patient with justification for the selection with clinical reasoning.")
 
 class DiagnosisGenerationService:
+    def __init__(self) -> None:
+        self.llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
 
     def process(self, clinical_record: ClinicalRecord) -> None:
         """
@@ -161,15 +163,11 @@ class DiagnosisGenerationService:
             </output>
         """)
 
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.1)
-
         knowledge_base = self._retrieve_medical_knowledge(clinical_record)
         symptoms_details = self._format_symptoms_for_prompt(clinical_record.classified_symptoms or [])
-
+        
         diagnosis_output_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
-
-        # 1 - Generate diagnosis
-        diagnosis_chain = diagnosis_template | llm | diagnosis_output_parser
+        diagnosis_chain = diagnosis_template | self.llm | diagnosis_output_parser
         parsed_diagnosis = diagnosis_chain.invoke({
             "knowledge_base": knowledge_base,
             "summary": clinical_record.summary,
@@ -186,9 +184,9 @@ class DiagnosisGenerationService:
         print('generating treatment plan and report')
         # Generate treatment plan and final report in a single chain
         treatment_and_report_chain = (
-            {"treatment_plan": treatment_plan_template | llm | StrOutputParser()}
+            {"treatment_plan": treatment_plan_template | self.llm | StrOutputParser()}
             | {"diagnosis_output": RunnablePassthrough(), "treatment_plan": RunnablePassthrough()}
-            | report_template | llm | StrOutputParser()
+            | report_template | self.llm | StrOutputParser()
         )
         
         final_report = treatment_and_report_chain.invoke({
@@ -197,46 +195,48 @@ class DiagnosisGenerationService:
         
         return final_report, parsed_diagnosis
 
+    def _format_docs(self, docs):
+        return "\n\n".join(doc.page_content for doc in docs)
+
     def _retrieve_medical_knowledge(self, clinical_record: ClinicalRecord) -> str:
-        """
-        Simple RAG implementation using in-memory vector store with medical knowledge.
-        """
-        try:
-            print("Retrieving medical knowledge")
-            # Initialize embeddings
-            embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-            
-            # Create a simple medical knowledge base
-            medical_documents = get_medical_documents()
-            
-            # Initialize vector store
-            vector_store = InMemoryVectorStore(embeddings)
-            vector_store.add_documents(medical_documents)
-            
-            # Create query from symptoms and patient info
-            query_parts = []
-            if clinical_record.classified_symptoms:
-                symptom_names = [s.name.lower() for s in clinical_record.classified_symptoms]
-                query_parts.extend(symptom_names)
-            
-            if clinical_record.reason_for_visit:
-                query_parts.append(clinical_record.reason_for_visit.lower())
-                
-            query = " ".join(query_parts)
-            
-            # Retrieve relevant knowledge
-            relevant_docs = vector_store.similarity_search(query, k=3)
-            
-            # Format context
-            context_parts = []
-            for doc in relevant_docs:
-                context_parts.append(f"- {doc.page_content}")
-            
-            return "\n".join(context_parts) if context_parts else "General medical knowledge base available for consultation."
-            
-        except Exception as e:
-            print(f"Error retrieving medical knowledge: {str(e)}")
-            return "Medical knowledge base temporarily unavailable."
+        query_parts = []
+        if clinical_record.reason_for_visit:
+            query_parts.append(clinical_record.reason_for_visit.lower())
+        if clinical_record.classified_symptoms:
+            symptom_names = [s.name.lower() for s in clinical_record.classified_symptoms]
+            query_parts.extend(symptom_names)
+        if len(query_parts) == 0:
+            return ""
+
+        query = " ".join(query_parts)
+
+        medical_knowledge = MedicalKnowledgeRepository()
+        relevant_docs = medical_knowledge.similarity_search(query)
+        context_parts = []
+        for doc in relevant_docs:
+            context_parts.append(f"- {doc.page_content}")
+        
+        return "\n".join(context_parts) if context_parts else ""
+        
+
+        # print('loading RAG for medical knowledge')
+        # vectorstore = MedicalKnowledgeRepository().vectorstore
+        # prompt = hub.pull("rlm/rag-prompt")
+
+        # qa_chain = (
+        #     {
+        #         "context": vectorstore.as_retriever() | self._format_docs,
+        #         "question": RunnablePassthrough()
+        #     }
+        #     | prompt
+        #     | self.llm
+        #     | StrOutputParser()
+        # )
+
+        # response = qa_chain.invoke(query)
+        # print(f'got response from qa_chain: {response}')
+
+        # return response
 
     def _format_symptoms_for_prompt(self, symptoms: List[ClassifiedSymptoms]) -> str:
         """Format symptoms data for inclusion in the LLM prompt."""

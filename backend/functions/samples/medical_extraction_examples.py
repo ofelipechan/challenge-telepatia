@@ -24,8 +24,6 @@ def get_examples():
                     }
                 ],
                 "reason_for_visit": "Acute onset of severe chest pain with associated shortness of breath requiring immediate cardiac evaluation",
-                "confidence_score": 0.95,
-                "validation_notes": "All patient identifiers validated. Symptoms clearly described with appropriate severity classification."
             }
         },
         {
@@ -52,8 +50,6 @@ def get_examples():
                     }
                 ],
                 "reason_for_visit": "Evaluation of persistent mild headache with associated dizziness in elderly patient",
-                "confidence_score": 0.88,
-                "validation_notes": "Patient identifiers validated. Symptoms appropriately classified as mild."
             }
         }
     ]

@@ -11,12 +11,11 @@ class PatientInfo(BaseModel):
 
 class Symptom(BaseModel):
     name: str = Field(description="The symptom name")
-    duration: Optional[str] = Field(description="How long the symptom has persisted")
-    intensity: Optional[str] = Field(description="How intense is the symptom")
+    duration: Optional[str] = Field(description="How long the symptom have persisted")
+    intensity: Optional[str] = Field(description="How intense is the symptom presented by the patient")
 
 class MedicalExtraction(BaseModel):
     summary: Optional[str] = Field(description="A short summary of what the transcription is about")
     patient_info: Optional[PatientInfo] = Field(description="Patient identification information")
     symptoms: Optional[List[Symptom]] = Field(description="List of symptoms mentioned")
     reason_for_visit: Optional[str] = Field(description="Main reason for the medical visit")
-    confidence_score: float = Field(description="Confidence in extraction accuracy (0-1)")

@@ -49,9 +49,8 @@ class MedicalInfoExtractor:
         """
         Extract medical information from transcription
         """
-        print("Start processing transcription for extraction")
+        print("Start processing medical information extraction")
         json_parser = PydanticOutputParser(pydantic_object=MedicalExtraction)
-        # json_parser = JsonOutputParser(pydantic_object=MedicalExtraction)
 
         chain = self._build_chain(json_parser)
 
@@ -63,67 +62,6 @@ class MedicalInfoExtractor:
         print("Medical extraction information finished")
 
         return result
-
-    def _symptoms_severity_classification(self, medical_extraction: MedicalExtraction) -> List[ClassifiedSymptoms]:
-        print('Classify symptoms classification using semantic similarity embeddings')
-        
-        if not medical_extraction.symptoms:
-            return []
-        
-        # Initialize OpenAI embeddings
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-        
-        # Create severity reference documents for vector store
-        severity_documents = [
-            Document(
-                page_content="Minor discomfort, slight symptoms, minimal impact on daily activities, barely noticeable",
-                metadata={"severity": "mild"}
-            ),
-            Document(
-                page_content="Noticeable discomfort, some impact on daily activities, manageable symptoms, requires attention",
-                metadata={"severity": "moderate"}
-            ),
-            Document(
-                page_content="Significant discomfort, major impact on daily activities, intense symptoms, major limitations",
-                metadata={"severity": "severe"}
-            ),
-            Document(
-                page_content="Life-threatening, emergency symptoms, extreme discomfort, requires urgent medical intervention",
-                metadata={"severity": "critical"}
-            )
-        ]
-        
-        # Initialize vector store with severity references
-        vector_store = InMemoryVectorStore(embeddings)
-        vector_store.add_documents(severity_documents)
-        
-        classified_symptoms = []
-        
-        for symptom in medical_extraction.symptoms:
-            # Create symptom query text
-            symptom_text = f"{symptom.name}"
-            if symptom.duration:
-                symptom_text += f" lasting {symptom.duration}"
-                
-            # Search for most similar severity level
-            results = vector_store.similarity_search_with_score(symptom_text, k=4)
-            
-            # Get the best match (highest similarity = lowest score)
-            best_match = min(results, key=lambda x: x[1])
-            severity_level = best_match[0].metadata["severity"]
-            confidence_score = 1 - best_match[1]  # Convert distance to similarity score
-            
-            classified_symptoms.append(ClassifiedSymptoms(
-                name=symptom.name,
-                intensity=symptom.intensity,
-                duration=symptom.duration,
-                severity=severity_level,
-                confidence_score=confidence_score,
-            ))
-        
-        print(f"Classified {len(classified_symptoms)} symptoms with severity levels")
-        return classified_symptoms
-
 
     def _build_chain(self, json_parser: PydanticOutputParser[MedicalExtraction]):
         llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0.1)
@@ -175,8 +113,8 @@ class MedicalInfoExtractor:
                 - behavior situations (actions the patient took that could have lead to the symptoms)
                 - lifestyle (the patient's lifestyle, habits, and routines)
                 - nutrition (what did the patient report to have eaten)
-                - hydration (the patient report to getting hydrated)
-                - sleep (how much sleep is the patient getting)
+                - hydration (the hydration status of the patient)
+                - sleep (how much sleep is the patient getting or the absense of it)
                 - or any other relevant information.
             </instructions>
             <output>
@@ -193,3 +131,64 @@ class MedicalInfoExtractor:
         ])
 
         return prompt_template | llm | json_parser
+
+
+    def _symptoms_severity_classification(self, medical_extraction: MedicalExtraction) -> List[ClassifiedSymptoms]:
+        print('Classify symptoms classification using semantic similarity embeddings')
+        
+        if not medical_extraction.symptoms:
+            return []
+        
+        # Initialize OpenAI embeddings
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+        
+        # Create severity reference documents for vector store
+        severity_documents = [
+            Document(
+                page_content="Minor discomfort, slight symptoms, minimal impact on daily activities, barely noticeable",
+                metadata={"severity": "mild"}
+            ),
+            Document(
+                page_content="Noticeable discomfort, some impact on daily activities, manageable symptoms, requires attention",
+                metadata={"severity": "moderate"}
+            ),
+            Document(
+                page_content="Significant discomfort, major impact on daily activities, intense symptoms, major limitations",
+                metadata={"severity": "severe"}
+            ),
+            Document(
+                page_content="Life-threatening, emergency symptoms, extreme discomfort, requires urgent medical intervention",
+                metadata={"severity": "critical"}
+            )
+        ]
+        
+        # Initialize vector store with severity references
+        vector_store = InMemoryVectorStore(embeddings)
+        vector_store.add_documents(severity_documents)
+        
+        classified_symptoms = []
+        
+        for symptom in medical_extraction.symptoms:
+            # Create symptom query text
+            symptom_text = f"{symptom.name}"
+            if symptom.duration:
+                symptom_text += f" lasting {symptom.duration}"
+            
+            # Search for most similar severity level
+            results = vector_store.similarity_search_with_score(symptom_text, k=4)
+
+            # Get the best match (highest similarity = lowest score)
+            best_match = min(results, key=lambda x: x[1])
+            severity_level = best_match[0].metadata["severity"]
+            confidence_score = 1.0 - best_match[1]  # Convert distance to confidence (lower distance = higher confidence)
+
+            classified_symptoms.append(ClassifiedSymptoms(
+                name=symptom.name,
+                intensity=symptom.intensity,
+                duration=symptom.duration,
+                severity=severity_level,
+                confidence_score=confidence_score,
+            ))
+        
+        print(f"Classified {len(classified_symptoms)} symptoms with severity levels")
+        return classified_symptoms
