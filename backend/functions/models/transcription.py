@@ -8,6 +8,8 @@ class TranscriptionStatus(str, Enum):
     """
     Enum for transcription processing status.
     """
+    TRANSCRIPTION_WAITING = "transcription_waiting"
+    TRANSCRIPTION_IN_PROGRESS = "transcription_in_progress"
     TRANSCRIPTION_FINISHED = "transcription_finished"
     TRANSCRIPTION_ERROR = "transcription_error"
     DIAGNOSIS_STARTED = "diagnosis_started"
@@ -24,9 +26,10 @@ class Transcription(BaseModel):
     session_id: str
     audio_url: Optional[str] = Field(default=None, description="URL of the audio file")
     text: Optional[str] = Field(description="transcription in text")
-    context: Optional[str] = Field(default=None, description="Additional context or notes about the transcription")
+    language: Optional[str] = Field(default=None, description="Spoken language in the transcription")
     duration: Optional[float] = Field(default=None, description="Duration of the audio file in seconds")
+    context: Optional[str] = Field(default=None, description="Additional context or notes about the transcription")
     status: Optional[TranscriptionStatus] = Field(default=None, description="Current status of the transcription process")
     error_message: Optional[str] = Field(default=None, description="Error message if transcription failed")
-    created_at: datetime = firestore.SERVER_TIMESTAMP
+    created_at: Optional[datetime] = Field(default=None, description="Date when transcription document was created")
     updated_at: Optional[datetime] = Field(default=None, description="Timestamp when the transcription was last updated")

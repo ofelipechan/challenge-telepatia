@@ -84,7 +84,7 @@ export const medicalApi = {
       ? { audio_url: data.audioUrl }
       : { transcription_text: data.transcriptionText };
     
-    const response = await api.post('/transcription_handler', requestBody);
+    const response = await api.post('/start_process', requestBody);
     return response.data;
   },
 
