@@ -11,6 +11,7 @@ from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
+from langchain_community.callbacks import get_openai_callback
 from langchain import hub
 
 class DiagnosisList(BaseModel):
@@ -109,7 +110,7 @@ class DiagnosisGenerationService:
                 # Treatment Plan
                 - Develop a **personalized treatment plan** tailored to the patient's condition and symptoms.  
                 - Adjust treatment intensity based on **symptom severity**.  
-                - Include both **pharmacological** and **non-pharmacological** interventions when applicable.  
+                - Include both **pharmacological** and **non-pharmacological** interventions (when applicable).
                 - Provide a clear **explanation and clinical reasoning** behind each element of the treatment plan.  
 
                 # Recommendations
@@ -166,33 +167,40 @@ class DiagnosisGenerationService:
         knowledge_base = self._retrieve_medical_knowledge(clinical_record)
         symptoms_details = self._format_symptoms_for_prompt(clinical_record.classified_symptoms or [])
         
-        diagnosis_output_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
-        diagnosis_chain = diagnosis_template | self.llm | diagnosis_output_parser
-        parsed_diagnosis = diagnosis_chain.invoke({
-            "knowledge_base": knowledge_base,
-            "summary": clinical_record.summary,
-            "patient_info": clinical_record.patient_info.model_dump_json(),
-            "reason_for_visit": clinical_record.reason_for_visit or "Not specified",
-            "symptoms_details": symptoms_details,
-            "diagnosis_output_parser": diagnosis_output_parser.get_format_instructions()
-        })
-        print('diagnosis generated')
+        total_tokens = 0
+
+        with get_openai_callback() as cb:
+            diagnosis_output_parser = PydanticOutputParser(pydantic_object=DiagnosisList)
+            diagnosis_chain = diagnosis_template | self.llm | diagnosis_output_parser
+            parsed_diagnosis = diagnosis_chain.invoke({
+                "knowledge_base": knowledge_base,
+                "summary": clinical_record.summary,
+                "patient_info": clinical_record.patient_info.model_dump_json(),
+                "reason_for_visit": clinical_record.reason_for_visit or "Not specified",
+                "symptoms_details": symptoms_details,
+                "diagnosis_output_parser": diagnosis_output_parser.get_format_instructions()
+            })
+            print('diagnosis generated')
+            total_tokens += cb.total_tokens
         
         # Convert the parsed diagnosis to a string
         diagnosis_string = parsed_diagnosis.model_dump_json()
         
         print('generating treatment plan and report')
         # Generate treatment plan and final report in a single chain
-        treatment_and_report_chain = (
-            {"treatment_plan": treatment_plan_template | self.llm | StrOutputParser()}
-            | {"diagnosis_output": RunnablePassthrough(), "treatment_plan": RunnablePassthrough()}
-            | report_template | self.llm | StrOutputParser()
-        )
+        with get_openai_callback() as cb:
+            treatment_and_report_chain = (
+                {"treatment_plan": treatment_plan_template | self.llm | StrOutputParser()}
+                | {"diagnosis_output": RunnablePassthrough(), "treatment_plan": RunnablePassthrough()}
+                | report_template | self.llm | StrOutputParser()
+            )
+            
+            final_report = treatment_and_report_chain.invoke({
+                "diagnosis_output": diagnosis_string
+            })
+            total_tokens += cb.total_tokens
         
-        final_report = treatment_and_report_chain.invoke({
-            "diagnosis_output": diagnosis_string
-        })
-        
+        print(f"Total tokens used for generating diagnosis: {total_tokens}")
         return final_report, parsed_diagnosis
 
     def _format_docs(self, docs):
@@ -211,7 +219,10 @@ class DiagnosisGenerationService:
         query = " ".join(query_parts)
 
         medical_knowledge = MedicalKnowledgeRepository()
+        print(f"the query is: {query}")
         relevant_docs = medical_knowledge.similarity_search(query)
+        print(f"found {len(relevant_docs)} relevant documents")
+        # relevant_docs = medical_knowledge.retrieve_full_docs(query)
         context_parts = []
         for doc in relevant_docs:
             context_parts.append(f"- {doc.page_content}")

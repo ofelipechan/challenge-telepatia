@@ -6,7 +6,7 @@ from triggers.diagnosis_generation import diagnosis_generation_handler
 from triggers.get_clinical_record import get_clinical_record
 from triggers.get_transcription_status import get_transcription
 from triggers.medical_information_extractor import information_extractor_handler
-from triggers.vector_db import load_documents, get_index_stats, query_vector_store
+from triggers.vector_db import load_documents, get_index_stats, query_documents, similarity_search
 from triggers.start_process import start_process
 
 set_global_options(max_instances=10)
@@ -22,7 +22,8 @@ __all__ = [
     "get_clinical_record",
     "load_documents",
     "get_index_stats",
-    "query_vector_store",
+    "query_documents",
+    "similarity_search",
     "start_process",
 ]
 
